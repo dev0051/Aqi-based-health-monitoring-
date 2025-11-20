@@ -1,15 +1,8 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "aqi.html",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/",
-      "dest": "/aqi.html"
+      "source": "/",
+      "destination": "/aqi.html"
     }
   ],
   "headers": [
