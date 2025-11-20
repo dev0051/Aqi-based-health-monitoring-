@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes" />
+  <meta name="description" content="Real-time HealthSense dashboard monitoring AQI, SPO2, Heart Rate, and Body Temperature from ESP32" />
+  <meta name="theme-color" content="#21e6c1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>HealthSense – Live AQI & Vitals</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #050609;
+      --card: rgba(19, 24, 34, 0.9);
+      --accent: #21e6c1;
+      --accent-soft: rgba(33, 230, 193, 0.16);
+      --text: #edf2fb;
+      --muted: #8b97b8;
+      --danger: #ff6b6b;
+      --warn: #ffd166;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at top, rgba(33, 230, 193, 0.08), transparent 35%), var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px clamp(16px, 4vw, 48px);
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    header h1 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 600;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 1rem;
+      max-width: 600px;
+    }
+
+    .status-chip {
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 10px 18px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .status-chip::before {
+      content: '';
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+    }
+
+    .grid {
+      display: grid;
+      gap: 24px;
+    }
+
+    .metrics {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    @media (max-width: 640px) {
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+      
+      .charts {
+        grid-template-columns: 1fr;
+      }
+      
+      header {
+        flex-direction: column;
+      }
+      
+      .gauge {
+        width: 140px;
+        height: 140px;
+      }
+      
+      body {
+        padding: 20px 16px;
+        gap: 20px;
+      }
+      
+      .card {
+        padding: 20px;
+      }
+    }
+
+    .charts {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: 0 20px 45px rgba(5, 6, 9, 0.6);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::after {
+      content: '';
+      position: absolute;
+      inset: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      pointer-events: none;
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .value {
+      font-size: clamp(2rem, 4vw, 2.75rem);
+      font-weight: 600;
+    }
+
+    .units {
+      font-size: 1rem;
+      color: var(--muted);
+      margin-left: 6px;
+    }
+
+    .trend {
+      margin-top: 12px;
+      font-size: 0.95rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .trend span {
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      font-weight: 500;
+    }
+
+    .card.warning .value {
+      color: var(--warn);
+    }
+
+    .card.danger .value {
+      color: var(--danger);
+    }
+
+    .last-sync {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .gauge {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      border: 12px solid var(--accent-soft);
+      margin: 20px auto 0;
+      position: relative;
+      display: grid;
+      place-items: center;
+    }
+
+    .gauge::before {
+      content: '';
+      position: absolute;
+      inset: -12px;
+      border-radius: 50%;
+      border: 12px solid transparent;
+      border-top-color: var(--accent);
+      transform: rotate(var(--rotation, 0deg));
+      transition: transform 0.4s ease;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 260px !important;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      color: var(--muted);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .endpoint {
+      font-family: 'Space Grotesk', monospace;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 6px 10px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>HealthSense Live Dashboard</h1>
+      <p class="subtitle">Real-time Air Quality & Patient Vitals streamed directly from the ESP32 edge node.</p>
+    </div>
+    <div>
+      <div class="status-chip" id="link-status">Connecting...</div>
+      <p class="last-sync" id="last-sync">Last sync: --</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="grid metrics">
+      <article class="card" id="card-aqi">
+        <h2>AQI</h2>
+        <div class="value"><span id="aqi-value">--</span><span class="units">US AQI</span></div>
+        <p class="trend">Status: <span id="aqi-status">--</span></p>
+        <div class="gauge" id="aqi-gauge"></div>
+      </article>
+
+      <article class="card" id="card-spo2">
+        <h2>Pulse O₂</h2>
+        <div class="value"><span id="spo2-value">--</span><span class="units">%</span></div>
+        <p class="trend">Condition: <span id="spo2-status">--</span></p>
+      </article>
+
+      <article class="card" id="card-hr">
+        <h2>Heart Rate</h2>
+        <div class="value"><span id="hr-value">--</span><span class="units">BPM</span></div>
+        <p class="trend">Condition: <span id="hr-status">--</span></p>
+      </article>
+
+      <article class="card" id="card-temp">
+        <h2>Body Temp</h2>
+        <div class="value"><span id="temp-value">--</span><span class="units">°C</span></div>
+        <p class="trend">Condition: <span id="temp-status">--</span></p>
+      </article>
+    </section>
+
+    <section class="grid charts">
+      <article class="card">
+        <h2>Vitals Trend – SPO₂</h2>
+        <canvas id="spo2-chart"></canvas>
+      </article>
+      <article class="card">
+        <h2>Vitals Trend – Heart Rate</h2>
+        <canvas id="hr-chart"></canvas>
+      </article>
+      <article class="card">
+        <h2>Environment – AQI</h2>
+        <canvas id="aqi-chart"></canvas>
+      </article>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>ESP32 HealthSense Edge Node</span>
+    <span class="endpoint" id="endpoint-label"></span>
+  </footer>
+
+  <script>
+    // Configuration: Update this URL to your ESP32 endpoint
+    // For local network: 'http://esp32.local/api/telemetry' or 'http://192.168.1.100/api/telemetry'
+    // For public access: Use ngrok/tunnel URL or your ESP32's public IP
+    const DATA_ENDPOINT = window.ESP32_ENDPOINT || 'http://esp32.local/api/telemetry';
+    const POLL_INTERVAL_MS = 3000;
+    const MAX_POINTS = 25;
+
+    const state = {
+      charts: {},
+      history: {
+        spo2: [],
+        heartRate: [],
+        aqi: [],
+      },
+    };
+
+    document.getElementById('endpoint-label').textContent = DATA_ENDPOINT;
+
+    const selectors = {
+      aqi: document.getElementById('aqi-value'),
+      aqiStatus: document.getElementById('aqi-status'),
+      spo2: document.getElementById('spo2-value'),
+      spo2Status: document.getElementById('spo2-status'),
+      hr: document.getElementById('hr-value'),
+      hrStatus: document.getElementById('hr-status'),
+      temp: document.getElementById('temp-value'),
+      tempStatus: document.getElementById('temp-status'),
+      gauge: document.getElementById('aqi-gauge'),
+      linkStatus: document.getElementById('link-status'),
+      lastSync: document.getElementById('last-sync'),
+    };
+
+    const ctxSpo2 = document.getElementById('spo2-chart').getContext('2d');
+    const ctxHr = document.getElementById('hr-chart').getContext('2d');
+    const ctxAqi = document.getElementById('aqi-chart').getContext('2d');
+
+    const baseChartOptions = {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            data: [],
+            tension: 0.35,
+            fill: true,
+            borderColor: '#21e6c1',
+            backgroundColor: 'rgba(33, 230, 193, 0.08)',
+            borderWidth: 2,
+            pointRadius: 0,
+          },
+        ],
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+        },
+        scales: {
+          x: {
+            ticks: { color: '#8b97b8' },
+            grid: { display: false },
+          },
+          y: {
+            ticks: { color: '#8b97b8' },
+            grid: {
+              color: 'rgba(255,255,255,0.04)',
+            },
+          },
+        },
+      },
+    };
+
+    state.charts.spo2 = new Chart(ctxSpo2, structuredClone(baseChartOptions));
+    state.charts.heartRate = new Chart(ctxHr, structuredClone(baseChartOptions));
+    state.charts.aqi = new Chart(ctxAqi, structuredClone(baseChartOptions));
+
+    function pushData(key, value) {
+      const history = state.history[key];
+      const chart = state.charts[key];
+      const timestamp = new Date().toLocaleTimeString();
+
+      history.push({ t: timestamp, v: value });
+      if (history.length > MAX_POINTS) history.shift();
+
+      chart.data.labels = history.map((point) => point.t);
+      chart.data.datasets[0].data = history.map((point) => point.v);
+      chart.update();
+    }
+
+    function classifyAQI(aqi) {
+      if (aqi <= 50) return { label: 'Good', className: '' };
+      if (aqi <= 100) return { label: 'Moderate', className: '' };
+      if (aqi <= 150) return { label: 'Unhealthy (Sensitive)', className: 'warning' };
+      if (aqi <= 200) return { label: 'Unhealthy', className: 'warning' };
+      return { label: 'Hazardous', className: 'danger' };
+    }
+
+    function classifySpo2(value) {
+      if (value >= 95) return { label: 'Normal', className: '' };
+      if (value >= 90) return { label: 'Watch', className: 'warning' };
+      return { label: 'Critical', className: 'danger' };
+    }
+
+    function classifyHeartRate(value) {
+      if (value < 60) return { label: 'Low', className: 'warning' };
+      if (value <= 100) return { label: 'Normal', className: '' };
+      return { label: 'Tachycardia', className: 'warning' };
+    }
+
+    function classifyTemp(value) {
+      if (value >= 38) return { label: 'Fever', className: 'warning' };
+      if (value <= 35.5) return { label: 'Hypothermia', className: 'warning' };
+      return { label: 'Normal', className: '' };
+    }
+
+    function updateGauge(aqi) {
+      const rotation = Math.min(Math.max(aqi, 0), 500) / 500 * 360;
+      selectors.gauge.style.setProperty('--rotation', `${rotation}deg`);
+    }
+
+    function setCardState(cardId, className) {
+      const card = document.getElementById(cardId);
+      card.classList.remove('warning', 'danger');
+      if (className) card.classList.add(className);
+    }
+
+    async function fetchTelemetry() {
+      try {
+        selectors.linkStatus.textContent = 'Syncing';
+        const response = await fetch(DATA_ENDPOINT, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        /*
+          Expected JSON structure:
+          {
+            "aqi": 82,
+            "spo2": 97,
+            "heart_rate": 78,
+            "body_temp_c": 36.8,
+            "timestamp": "2025-11-19T10:21:00Z"
+          }
+        */
+        applyTelemetry(payload);
+        selectors.linkStatus.textContent = 'Live';
+      } catch (error) {
+        console.error('Telemetry fetch failed', error);
+        selectors.linkStatus.textContent = 'Offline';
+      }
+    }
+
+    function applyTelemetry(data) {
+      const aqi = Number(data.aqi ?? NaN);
+      const spo2 = Number(data.spo2 ?? NaN);
+      const heart = Number(data.heart_rate ?? NaN);
+      const temp = Number(data.body_temp_c ?? NaN);
+
+      if (!Number.isNaN(aqi)) {
+        selectors.aqi.textContent = aqi.toFixed(0);
+        const { label, className } = classifyAQI(aqi);
+        selectors.aqiStatus.textContent = label;
+        setCardState('card-aqi', className);
+        updateGauge(aqi);
+        pushData('aqi', aqi);
+      }
+
+      if (!Number.isNaN(spo2)) {
+        selectors.spo2.textContent = spo2.toFixed(0);
+        const { label, className } = classifySpo2(spo2);
+        selectors.spo2Status.textContent = label;
+        setCardState('card-spo2', className);
+        pushData('spo2', spo2);
+      }
+
+      if (!Number.isNaN(heart)) {
+        selectors.hr.textContent = heart.toFixed(0);
+        const { label, className } = classifyHeartRate(heart);
+        selectors.hrStatus.textContent = label;
+        setCardState('card-hr', className);
+        pushData('heartRate', heart);
+      }
+
+      if (!Number.isNaN(temp)) {
+        selectors.temp.textContent = temp.toFixed(1);
+        const { label, className } = classifyTemp(temp);
+        selectors.tempStatus.textContent = label;
+        setCardState('card-temp', className);
+      }
+
+      selectors.lastSync.textContent = `Last sync: ${new Date(data.timestamp ?? Date.now()).toLocaleTimeString()}`;
+    }
+
+    function startPolling() {
+      fetchTelemetry();
+      setInterval(fetchTelemetry, POLL_INTERVAL_MS);
+    }
+
+    window.addEventListener('DOMContentLoaded', startPolling);
+  </script>
+</body>
+</html>
