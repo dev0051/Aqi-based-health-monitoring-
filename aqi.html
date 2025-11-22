@@ -300,10 +300,11 @@
   </footer>
 
   <script>
-    // Configuration: Update this URL to your ESP32 endpoint
-    // For local network: 'http://esp32.local/api/telemetry' or 'http://192.168.1.100/api/telemetry'
-    // For public access: Use ngrok/tunnel URL or your ESP32's public IP
-    const DATA_ENDPOINT = window.ESP32_ENDPOINT || 'http://esp32.local/api/telemetry';
+    // Configuration: Update this URL to your data endpoint
+    // For Python server: 'http://localhost:5000/api/telemetry'
+    // For ESP32: 'http://esp32.local/api/telemetry' or 'http://192.168.1.100/api/telemetry'
+    // For public access: Use ngrok/tunnel URL or your server's public IP
+    const DATA_ENDPOINT = window.ESP32_ENDPOINT || 'http://localhost:5000/api/telemetry';
     const POLL_INTERVAL_MS = 3000;
     const MAX_POINTS = 25;
 
