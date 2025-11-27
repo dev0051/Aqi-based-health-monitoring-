@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdjsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
   <style>
     :root {
       color-scheme: light dark;
@@ -300,11 +300,13 @@
   </footer>
 
   <script>
-    // Configuration: Update this URL to your data endpoint
-    // For Python server: 'http://localhost:5000/api/telemetry'
-    // For ESP32: 'http://esp32.local/api/telemetry' or 'http://192.168.1.100/api/telemetry'
-    // For public access: Use ngrok/tunnel URL or your server's public IP
-    const DATA_ENDPOINT = window.ESP32_ENDPOINT || 'http://localhost:5000/api/telemetry';
+    // Configuration
+    //  - Set window.ESP32_ENDPOINT globally to point to your device/server
+    //  - Append ?demo=1 to URL or set window.DEMO_MODE=true to showcase without hardware
+    const urlParams = new URLSearchParams(window.location.search);
+    const DEMO_MODE = Boolean(window.DEMO_MODE ?? urlParams.has('demo'));
+    const DEMO_INTERVAL_MS = Number(window.DEMO_INTERVAL_MS ?? 3000);
+    const DATA_ENDPOINT = DEMO_MODE ? null : (window.ESP32_ENDPOINT || 'http://localhost:5000/api/telemetry');
     const POLL_INTERVAL_MS = 3000;
     const MAX_POINTS = 25;
 
@@ -317,7 +319,7 @@
       },
     };
 
-    document.getElementById('endpoint-label').textContent = DATA_ENDPOINT;
+    document.getElementById('endpoint-label').textContent = DEMO_MODE ? 'Demo mode (random data)' : DATA_ENDPOINT;
 
     const selectors = {
       aqi: document.getElementById('aqi-value'),
@@ -430,6 +432,7 @@
     }
 
     async function fetchTelemetry() {
+      if (!DATA_ENDPOINT) return;
       try {
         selectors.linkStatus.textContent = 'Syncing';
         const response = await fetch(DATA_ENDPOINT, { cache: 'no-store' });
@@ -494,7 +497,30 @@
       selectors.lastSync.textContent = `Last sync: ${new Date(data.timestamp ?? Date.now()).toLocaleTimeString()}`;
     }
 
+    function generateRandomWithin([min, max], decimals = 0) {
+      const value = Math.random() * (max - min) + min;
+      return Number(value.toFixed(decimals));
+    }
+
+    function generateDemoTelemetry() {
+      return {
+        aqi: generateRandomWithin([30, 160]),
+        spo2: generateRandomWithin([94, 99]),
+        heart_rate: generateRandomWithin([65, 105]),
+        body_temp_c: generateRandomWithin([36.2, 38], 1),
+        timestamp: new Date().toISOString(),
+      };
+    }
+
     function startPolling() {
+      if (DEMO_MODE || !DATA_ENDPOINT) {
+        selectors.linkStatus.textContent = 'Demo';
+        selectors.lastSync.textContent = 'Demo mode active';
+        applyTelemetry(generateDemoTelemetry());
+        setInterval(() => applyTelemetry(generateDemoTelemetry()), DEMO_INTERVAL_MS);
+        return;
+      }
+
       fetchTelemetry();
       setInterval(fetchTelemetry, POLL_INTERVAL_MS);
     }

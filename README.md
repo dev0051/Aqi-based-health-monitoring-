@@ -6,16 +6,16 @@ Real-time dashboard for monitoring Air Quality Index (AQI), SPO2, Heart Rate, an
 
 ### Local Testing
 
-1. Make sure your ESP32 is running and accessible
-2. Update the endpoint in `aqi.html` (line 271) if needed:
-   ```javascript
-   const DATA_ENDPOINT = 'http://esp32.local/api/telemetry';
-   ```
-3. Start a local server:
-   ```bash
-   python3 -m http.server 8000
-   ```
-4. Open `http://localhost:8000/aqi.html` in your browser
+**Option A – Live data via Python server**
+1. Install dependencies: `pip install -r requirements.txt`
+2. Start the Flask receiver: `python server.py` (serves `aqi.html` at `http://localhost:5000`)
+3. Point your ESP32 (or any sender) to `http://<your-ip>:5000/api/telemetry`
+4. Open `http://localhost:5000` to view live updates
+
+**Option B – Demo mode (no hardware/server)**
+1. Serve `aqi.html` from any static host (local file, Netlify, Vercel, etc.)
+2. Append `?demo=1` to the URL (e.g., `http://localhost:8000/aqi.html?demo=1`)
+3. The dashboard will generate realistic random vitals for presentations
 
 ### Deploy to Production (Get Your Own URL)
 

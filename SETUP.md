@@ -32,6 +32,17 @@ http://localhost:5000
 
 The dashboard will automatically poll the server every 3 seconds for new data.
 
+### Demo Mode (no hardware/server required)
+
+If you only need to showcase the UI (e.g., on Vercel) without an ESP32 or Python server:
+
+1. Deploy `aqi.html` anywhere (GitHub Pages, Vercel, Netlify, etc.)
+2. Open the page with `?demo=1` appended to the URL, for example:<br>
+   `https://your-dashboard.vercel.app/aqi.html?demo=1`
+3. The dashboard will generate realistic random vitals/AQI data every 3 seconds.
+
+You can also set `window.DEMO_MODE = true` before the script runs if you want to hard-code demo mode into a build.
+
 ## How Your Friend Can Send Data
 
 ### Option 1: Using Python Script (Recommended)
@@ -72,6 +83,21 @@ curl -X POST http://YOUR_IP:5000/api/telemetry \
   "timestamp": "2025-11-19T10:21:00Z"
 }
 ```
+
+### Option 4: Built-in demo data sender
+
+Need moving charts but no hardware handy? Use the included script:
+
+```bash
+python demo_data_sender.py
+```
+
+Flags:
+- `--endpoint https://your-url/api/telemetry` – point to a remote server or tunnel
+- `--interval 5` – send data every 5 seconds (default 3s)
+- `--once` – send a single payload and exit
+
+This is great for demos on Vercel/Netlify when only the static dashboard is deployed.
 
 ## Finding Your IP Address
 
