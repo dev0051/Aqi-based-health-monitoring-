@@ -617,11 +617,15 @@
 
     async function tryFetch(url) {
       try {
+        console.log(`[tryFetch] Fetching from: ${url}`);
         const response = await fetch(url, { cache: 'no-store' });
+        console.log(`[tryFetch] Response status: ${response.status} from ${url}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const payload = await response.json();
+        console.log(`[tryFetch] Parsed JSON from ${url}:`, payload);
         return { ok: true, payload };
       } catch (err) {
+        console.log(`[tryFetch] Error from ${url}:`, err.message);
         return { ok: false, error: err };
       }
     }
@@ -633,27 +637,36 @@
 
       for (const ep of CANDIDATE_ENDPOINTS) {
         try {
+          console.log(`[fetchTelemetry] Trying endpoint: ${ep}`);
           const result = await tryFetch(ep);
           if (result.ok) {
+            console.log(`[fetchTelemetry] Success from ${ep}:`, result.payload);
             applyTelemetry(result.payload);
             selectors.linkStatus.textContent = `Live (${ep})`;
             return;
+          } else {
+            console.log(`[fetchTelemetry] Failed from ${ep}:`, result.error);
           }
         } catch (e) {
+          console.log(`[fetchTelemetry] Exception from ${ep}:`, e);
           // continue to next endpoint
         }
       }
 
       // If we reach here, none worked
       console.error('Telemetry fetch failed for all endpoints');
+      console.error('Endpoints tried:', CANDIDATE_ENDPOINTS);
       selectors.linkStatus.textContent = 'Offline';
     }
 
     function applyTelemetry(data) {
+      console.log('[applyTelemetry] Received data:', data);
       const aqi = Number(data.aqi ?? NaN);
       const spo2 = Number(data.spo2 ?? NaN);
       const heart = Number(data.heart_rate ?? NaN);
       const temp = Number(data.body_temp_c ?? NaN);
+
+      console.log(`[applyTelemetry] Parsed values: aqi=${aqi}, spo2=${spo2}, heart=${heart}, temp=${temp}`);
 
       if (!Number.isNaN(aqi)) {
         selectors.aqi.textContent = aqi.toFixed(0);
