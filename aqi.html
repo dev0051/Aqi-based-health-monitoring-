@@ -395,10 +395,6 @@
   </style>
 </head>
 <body>
-  <!-- High-contrast visible banner for troubleshooting (always shown) -->
-  <div id="visible-banner" style="position:fixed;left:12px;top:12px;z-index:99999;background:#fff;color:#000;padding:8px 12px;border-radius:6px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,0.25);">
-    Server: OK — open <code>/api/telemetry</code> to verify
-  </div>
   <header>
     <div>
       <h1>HealthSense Live Dashboard</h1>
@@ -458,14 +454,6 @@
     <span>ESP32 HealthSense Edge Node</span>
     <span class="endpoint" id="endpoint-label"></span>
   </footer>
-
-  <!-- Visible debug panel so users can see fetch status without opening devtools -->
-  <div id="debug-panel" style="position:fixed;right:12px;bottom:12px;z-index:9999;background:rgba(0,0,0,0.6);color:#fff;padding:10px;border-radius:8px;max-width:320px;font-family:monospace;font-size:12px;">
-    <div style="font-weight:600;margin-bottom:6px;">Debug</div>
-    <div id="debug-endpoint">Endpoint: -</div>
-    <div id="debug-status">Status: -</div>
-    <div id="debug-payload" style="white-space:pre-wrap;margin-top:6px;">Payload: -</div>
-  </div>
 
   <script>
     // Configuration
@@ -623,28 +611,11 @@
 
     async function tryFetch(url) {
       try {
-        console.log(`[tryFetch] Fetching from: ${url}`);
-        // visible debug UI
-        const dbgEp = document.getElementById('debug-endpoint');
-        const dbgStatus = document.getElementById('debug-status');
-        const dbgPayload = document.getElementById('debug-payload');
-        if (dbgEp) dbgEp.textContent = `Endpoint: ${url}`;
-
         const response = await fetch(url, { cache: 'no-store' });
-        console.log(`[tryFetch] Response status: ${response.status} from ${url}`);
-        if (!response.ok) {
-          if (dbgStatus) dbgStatus.textContent = `Status: HTTP ${response.status}`;
-          throw new Error(`HTTP ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const payload = await response.json();
-        console.log(`[tryFetch] Parsed JSON from ${url}:`, payload);
-        if (dbgStatus) dbgStatus.textContent = `Status: OK`;
-        if (dbgPayload) dbgPayload.textContent = `Payload: ${JSON.stringify(payload, null, 2)}`;
         return { ok: true, payload };
       } catch (err) {
-        console.log(`[tryFetch] Error from ${url}:`, err.message);
-        const dbgStatus = document.getElementById('debug-status');
-        if (dbgStatus) dbgStatus.textContent = `Status: ERR: ${err.message}`;
         return { ok: false, error: err };
       }
     }
@@ -656,23 +627,13 @@
 
       for (const ep of CANDIDATE_ENDPOINTS) {
           try {
-            console.log(`[fetchTelemetry] Trying endpoint: ${ep}`);
             const result = await tryFetch(ep);
             if (result.ok) {
-              console.log(`[fetchTelemetry] Success from ${ep}:`, result.payload);
               applyTelemetry(result.payload);
               selectors.linkStatus.textContent = `Live (${ep})`;
-              // also update visible debug endpoint/status
-              const dbgEp = document.getElementById('debug-endpoint');
-              const dbgStatus = document.getElementById('debug-status');
-              if (dbgEp) dbgEp.textContent = `Endpoint: ${ep}`;
-              if (dbgStatus) dbgStatus.textContent = `Status: Live`;
               return;
-            } else {
-              console.log(`[fetchTelemetry] Failed from ${ep}:`, result.error);
             }
           } catch (e) {
-            console.log(`[fetchTelemetry] Exception from ${ep}:`, e);
             // continue to next endpoint
           }
       }
@@ -684,13 +645,10 @@
     }
 
     function applyTelemetry(data) {
-      console.log('[applyTelemetry] Received data:', data);
       const aqi = Number(data.aqi ?? NaN);
       const spo2 = Number(data.spo2 ?? NaN);
       const heart = Number(data.heart_rate ?? NaN);
       const temp = Number(data.body_temp_c ?? NaN);
-
-      console.log(`[applyTelemetry] Parsed values: aqi=${aqi}, spo2=${spo2}, heart=${heart}, temp=${temp}`);
 
       if (!Number.isNaN(aqi)) {
         selectors.aqi.textContent = aqi.toFixed(0);
@@ -725,16 +683,6 @@
       }
 
       selectors.lastSync.textContent = `Last sync: ${new Date(data.timestamp ?? Date.now()).toLocaleTimeString()}`;
-
-      // Update visible troubleshooting banner (high-contrast)
-      try {
-        const vb = document.getElementById('visible-banner');
-        if (vb) {
-          vb.textContent = `Live — AQI:${data.aqi ?? '--'} SPO2:${data.spo2 ?? '--'} HR:${data.heart_rate ?? '--'} Temp:${data.body_temp_c ?? '--'}`;
-        }
-      } catch (e) {
-        // ignore if DOM not available
-      }
     }
 
     function generateRandomWithin([min, max], decimals = 0) {
