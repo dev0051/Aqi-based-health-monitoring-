@@ -719,7 +719,7 @@
     }
 
     function startPolling() {
-      if (DEMO_MODE || !DATA_ENDPOINT) {
+      if (DEMO_MODE) {
         selectors.linkStatus.textContent = 'Demo';
         selectors.lastSync.textContent = 'Demo mode active';
         applyTelemetry(generateDemoTelemetry());
@@ -727,6 +727,7 @@
         return;
       }
 
+      // Real mode: fetch from endpoints
       fetchTelemetry();
       setInterval(fetchTelemetry, POLL_INTERVAL_MS);
     }
