@@ -395,6 +395,10 @@
   </style>
 </head>
 <body>
+  <!-- High-contrast visible banner for troubleshooting (always shown) -->
+  <div id="visible-banner" style="position:fixed;left:12px;top:12px;z-index:99999;background:#fff;color:#000;padding:8px 12px;border-radius:6px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,0.25);">
+    Server: OK — open <code>/api/telemetry</code> to verify
+  </div>
   <header>
     <div>
       <h1>HealthSense Live Dashboard</h1>
@@ -727,6 +731,16 @@
       }
 
       selectors.lastSync.textContent = `Last sync: ${new Date(data.timestamp ?? Date.now()).toLocaleTimeString()}`;
+
+      // Update visible troubleshooting banner (high-contrast)
+      try {
+        const vb = document.getElementById('visible-banner');
+        if (vb) {
+          vb.textContent = `Live — AQI:${data.aqi ?? '--'} SPO2:${data.spo2 ?? '--'} HR:${data.heart_rate ?? '--'} Temp:${data.body_temp_c ?? '--'}`;
+        }
+      } catch (e) {
+        // ignore if DOM not available
+      }
     }
 
     function generateRandomWithin([min, max], decimals = 0) {
