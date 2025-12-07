@@ -241,15 +241,31 @@ if __name__ == '__main__':
     print("=" * 60)
     print("\n📊 Dashboard URL: https://aqi2.vercel.app/")
     print("📥 Data endpoint: https://aqi2.vercel.app/api/telemetry")
-    print("\nYour friend can send POST requests to:")
-    print("   http://10.116.204.42:5001/api/telemetry")
     print("\nTo find your IP address:")
     print("   - macOS/Linux: ifconfig | grep 'inet '")
     print("   - Windows: ipconfig")
     print("\n" + "=" * 60)
     print("Server starting...\n")
-    
-    # Run on all interfaces (0.0.0.0) so friend can connect
-    # For localhost only, use: app.run(host='127.0.0.1', port=5000, debug=True)
-    app.run(host='0.0.0.0', port=5000, debug=True)
+
+    # Allow configuring host/port/debug via CLI args or environment variables
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Run HealthSense Dashboard Server')
+    parser.add_argument('--host', default=os.getenv('HOST', '0.0.0.0'),
+                        help='Host/IP to bind the server (env: HOST)')
+    parser.add_argument('--port', type=int, default=int(os.getenv('PORT', '5000')),
+                        help='Port to bind the server (env: PORT)')
+    parser.add_argument('--debug', action='store_true',
+                        help='Enable Flask debug mode (or set env DEBUG=1)')
+
+    args = parser.parse_args()
+
+    host = args.host
+    port = args.port
+    debug_flag = args.debug or os.getenv('DEBUG', '').lower() in ('1', 'true', 'yes')
+
+    print(f"Binding to {host}:{port} (debug={debug_flag})")
+    print("Tip: if port 5000 is in use, run with `--port 5001` or set `PORT=5001`")
+
+    app.run(host=host, port=port, debug=debug_flag)
 
