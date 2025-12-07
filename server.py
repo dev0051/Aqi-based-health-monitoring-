@@ -105,6 +105,26 @@ def status():
         })
 
 
+@app.route('/api/telemetry/latest', methods=['GET'])
+def get_telemetry_latest():
+    """
+    Compact GET endpoint: returns the latest telemetry in a small JSON
+    Useful for constrained clients (ESP32) that only need the latest values.
+    """
+    with data_lock:
+        if latest_data["timestamp"] is None:
+            return jsonify({"error": "No data received yet"}), 503
+
+        # Return a compact payload tailored for lightweight clients
+        return jsonify({
+            "aqi": latest_data.get("aqi"),
+            "spo2": latest_data.get("spo2"),
+            "heart_rate": latest_data.get("heart_rate"),
+            "body_temp_c": latest_data.get("body_temp_c"),
+            "timestamp": latest_data.get("timestamp")
+        })
+
+
 if __name__ == '__main__':
     print("=" * 60)
     print("HealthSense Dashboard Server")

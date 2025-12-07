@@ -17,6 +17,12 @@ Real-time dashboard for monitoring Air Quality Index (AQI), SPO2, Heart Rate, an
 2. Append `?demo=1` to the URL (e.g., `http://localhost:8000/aqi.html?demo=1`)
 3. The dashboard will generate realistic random vitals for presentations
 
+**Option C – Fully offline build**
+1. Copy both `aqi_offline.html` and `chart.umd.min.js` to the same folder/USB
+2. Open `aqi_offline.html` directly from disk (double-click works)
+3. Everything runs client-side with synthetic data, no servers or query params required
+4. Use this version for USB sharing or environments without internet access
+
 ### Deploy to Production (Get Your Own URL)
 
 **Easiest Method - Netlify:**
@@ -38,17 +44,41 @@ Real-time dashboard for monitoring Air Quality Index (AQI), SPO2, Heart Rate, an
 
 ## 🔌 ESP32 Integration
 
-Your ESP32 should send JSON data to `/api/telemetry` endpoint:
+Two integration modes are supported:
 
-```json
-{
-  "aqi": 82,
-  "spo2": 97,
-  "heart_rate": 78,
-  "body_temp_c": 36.8,
-  "timestamp": "2025-11-19T10:21:00Z"
-}
-```
+- **ESP32 as sender (POST)**: the ESP32 posts its sensor readings to the server at `/api/telemetry`.
+
+  Example payload (POST to `http://<your-ip>:5000/api/telemetry`):
+
+  ```json
+  {
+    "aqi": 82,
+    "spo2": 97,
+    "heart_rate": 78,
+    "body_temp_c": 36.8,
+    "timestamp": "2025-11-19T10:21:00Z"
+  }
+  ```
+
+- **ESP32 as client (GET / polling)**: constrained devices can poll the compact endpoint at
+  `/api/telemetry/latest` to receive the most recent telemetry as a lightweight JSON object.
+
+  Example (GET `http://<your-ip>:5000/api/telemetry/latest`) returns:
+
+  ```json
+  {
+    "aqi": 82,
+    "spo2": 97,
+    "heart_rate": 78,
+    "body_temp_c": 36.8,
+    "timestamp": "2025-11-19T10:21:00Z"
+  }
+  ```
+
+There is an example Arduino sketch that demonstrates both sending and fetching data in `hardware_examples/`:
+
+- `hardware_examples/esp32_example.ino` — ESP32 that sends sensor values via POST (existing example).
+- `hardware_examples/esp32_fetch_example.ino` — ESP32 example that polls `/api/telemetry/latest` and parses JSON.
 
 ## 📋 Requirements
 
