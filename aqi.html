@@ -455,6 +455,14 @@
     <span class="endpoint" id="endpoint-label"></span>
   </footer>
 
+  <!-- Visible debug panel so users can see fetch status without opening devtools -->
+  <div id="debug-panel" style="position:fixed;right:12px;bottom:12px;z-index:9999;background:rgba(0,0,0,0.6);color:#fff;padding:10px;border-radius:8px;max-width:320px;font-family:monospace;font-size:12px;">
+    <div style="font-weight:600;margin-bottom:6px;">Debug</div>
+    <div id="debug-endpoint">Endpoint: -</div>
+    <div id="debug-status">Status: -</div>
+    <div id="debug-payload" style="white-space:pre-wrap;margin-top:6px;">Payload: -</div>
+  </div>
+
   <script>
     // Configuration
     const urlParams = new URLSearchParams(window.location.search);
@@ -618,14 +626,27 @@
     async function tryFetch(url) {
       try {
         console.log(`[tryFetch] Fetching from: ${url}`);
+        // visible debug UI
+        const dbgEp = document.getElementById('debug-endpoint');
+        const dbgStatus = document.getElementById('debug-status');
+        const dbgPayload = document.getElementById('debug-payload');
+        if (dbgEp) dbgEp.textContent = `Endpoint: ${url}`;
+
         const response = await fetch(url, { cache: 'no-store' });
         console.log(`[tryFetch] Response status: ${response.status} from ${url}`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+          if (dbgStatus) dbgStatus.textContent = `Status: HTTP ${response.status}`;
+          throw new Error(`HTTP ${response.status}`);
+        }
         const payload = await response.json();
         console.log(`[tryFetch] Parsed JSON from ${url}:`, payload);
+        if (dbgStatus) dbgStatus.textContent = `Status: OK`;
+        if (dbgPayload) dbgPayload.textContent = `Payload: ${JSON.stringify(payload, null, 2)}`;
         return { ok: true, payload };
       } catch (err) {
         console.log(`[tryFetch] Error from ${url}:`, err.message);
+        const dbgStatus = document.getElementById('debug-status');
+        if (dbgStatus) dbgStatus.textContent = `Status: ERR: ${err.message}`;
         return { ok: false, error: err };
       }
     }
@@ -636,21 +657,26 @@
       selectors.linkStatus.textContent = 'Syncing';
 
       for (const ep of CANDIDATE_ENDPOINTS) {
-        try {
-          console.log(`[fetchTelemetry] Trying endpoint: ${ep}`);
-          const result = await tryFetch(ep);
-          if (result.ok) {
-            console.log(`[fetchTelemetry] Success from ${ep}:`, result.payload);
-            applyTelemetry(result.payload);
-            selectors.linkStatus.textContent = `Live (${ep})`;
-            return;
-          } else {
-            console.log(`[fetchTelemetry] Failed from ${ep}:`, result.error);
+          try {
+            console.log(`[fetchTelemetry] Trying endpoint: ${ep}`);
+            const result = await tryFetch(ep);
+            if (result.ok) {
+              console.log(`[fetchTelemetry] Success from ${ep}:`, result.payload);
+              applyTelemetry(result.payload);
+              selectors.linkStatus.textContent = `Live (${ep})`;
+              // also update visible debug endpoint/status
+              const dbgEp = document.getElementById('debug-endpoint');
+              const dbgStatus = document.getElementById('debug-status');
+              if (dbgEp) dbgEp.textContent = `Endpoint: ${ep}`;
+              if (dbgStatus) dbgStatus.textContent = `Status: Live`;
+              return;
+            } else {
+              console.log(`[fetchTelemetry] Failed from ${ep}:`, result.error);
+            }
+          } catch (e) {
+            console.log(`[fetchTelemetry] Exception from ${ep}:`, e);
+            // continue to next endpoint
           }
-        } catch (e) {
-          console.log(`[fetchTelemetry] Exception from ${ep}:`, e);
-          // continue to next endpoint
-        }
       }
 
       // If we reach here, none worked
