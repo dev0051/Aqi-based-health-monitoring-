@@ -460,7 +460,17 @@
     const urlParams = new URLSearchParams(window.location.search);
     const DEMO_MODE = Boolean(window.DEMO_MODE ?? urlParams.has('demo'));
     const DEMO_INTERVAL_MS = Number(window.DEMO_INTERVAL_MS ?? 3000);
-    const DATA_ENDPOINT = DEMO_MODE ? null : (window.ESP32_ENDPOINT || 'http://localhost:5000/api/telemetry');
+    // Build a list of candidate endpoints (tries in order until one succeeds).
+    // Prefer relative API path so dashboard works when served from the same host.
+    const CANDIDATE_ENDPOINTS = [
+      window.ESP32_ENDPOINT || null,
+      '/api/telemetry',
+      '/api/telemetry/latest',
+      '/data',
+      // Developer-friendly fallbacks (replace with your laptop IP if needed)
+      'http://localhost:5001/api/telemetry',
+      'http://localhost:5001/data'
+    ].filter(Boolean);
     const POLL_INTERVAL_MS = 3000;
     const MAX_POINTS = 25;
 
@@ -473,7 +483,7 @@
       },
     };
 
-    document.getElementById('endpoint-label').textContent = DEMO_MODE ? 'Demo mode (random data)' : DATA_ENDPOINT;
+    document.getElementById('endpoint-label').textContent = DEMO_MODE ? 'Demo mode (random data)' : CANDIDATE_ENDPOINTS.join(' | ');
 
     const selectors = {
       aqi: document.getElementById('aqi-value'),
@@ -605,19 +615,38 @@
       if (className) card.classList.add(className);
     }
 
-    async function fetchTelemetry() {
-      if (!DATA_ENDPOINT) return;
+    async function tryFetch(url) {
       try {
-        selectors.linkStatus.textContent = 'Syncing';
-        const response = await fetch(DATA_ENDPOINT, { cache: 'no-store' });
+        const response = await fetch(url, { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const payload = await response.json();
-        applyTelemetry(payload);
-        selectors.linkStatus.textContent = 'Live';
-      } catch (error) {
-        console.error('Telemetry fetch failed', error);
-        selectors.linkStatus.textContent = 'Offline';
+        return { ok: true, payload };
+      } catch (err) {
+        return { ok: false, error: err };
       }
+    }
+
+    // Try candidate endpoints in order until one returns valid JSON
+    async function fetchTelemetry() {
+      if (DEMO_MODE) return;
+      selectors.linkStatus.textContent = 'Syncing';
+
+      for (const ep of CANDIDATE_ENDPOINTS) {
+        try {
+          const result = await tryFetch(ep);
+          if (result.ok) {
+            applyTelemetry(result.payload);
+            selectors.linkStatus.textContent = `Live (${ep})`;
+            return;
+          }
+        } catch (e) {
+          // continue to next endpoint
+        }
+      }
+
+      // If we reach here, none worked
+      console.error('Telemetry fetch failed for all endpoints');
+      selectors.linkStatus.textContent = 'Offline';
     }
 
     function applyTelemetry(data) {
