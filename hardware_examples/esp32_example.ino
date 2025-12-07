@@ -38,7 +38,7 @@ const char* password = "YOUR_WIFI_PASSWORD";   // <-- replace
 
 // Your backend endpoint. Use http://<IP>:<port>/api/telemetry for local
 // or https://your-vercel-url/api/telemetry for cloud.
-const char* serverUrl = "https://aqi2.vercel.app/api/telemetry"; // <-- replace
+const char* serverUrl = "http://10.116.204.42:5001/api/telemetry"; // <-- replace
 
 unsigned long lastWifiCheck  = 0;
 unsigned long lastUploadTime = 0;
@@ -180,17 +180,17 @@ void uploadTelemetry(int aqi, float tempC, int spo2Val, int hr, bool finger) {
   int code = -1;
 
   // Detect https vs http by prefix
-  bool isHttps = (strncmp(serverUrl, "https://", 8) == 0);
+  bool isHttps = (strncmp(https://aqi2.vercel.app/api/telemetry, "https://", 8) == 0);
 
   if (isHttps) {
     WiFiClientSecure client;
     client.setInsecure(); // DEV: skip certificate verification. Replace with setCACert() in production.
-    if (!http.begin(client, serverUrl)) {
+    if (!http.begin(client, https://aqi2.vercel.app/api/telemetry)) {
       Serial.println("HTTP begin failed (HTTPS)");
       return;
     }
   } else {
-    if (!http.begin(serverUrl)) {
+    if (!http.begin(https://aqi2.vercel.app/api/telemetry)) {
       Serial.println("HTTP begin failed (HTTP)");
       return;
     }
@@ -307,99 +307,107 @@ void loop() {
   if (millis() - lastUploadTime > 5000) {
     lastUploadTime = millis();
     uploadTelemetry(aqi, tempC, spo2, heartRate, finger);
-  }
+      // Diagnostics + safe POST
+      Serial.print("WiFi status: "); Serial.println(WiFi.status());
+      Serial.print("Local IP: "); Serial.println(WiFi.localIP());
 
-  delay(200);
-}
-int readAQI() {
-  // Example: Read analog value and convert to AQI
-  // Adjust this based on your actual sensor
-  int rawValue = analogRead(AQI_SENSOR_PIN);
-  int aqi = map(rawValue, 0, 4095, 0, 500);  // Adjust mapping based on your sensor
-  return aqi;
-}
+      if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi not connected, skip upload.");
+        return;
+      }
 
-// Function to read SPO2 sensor
-int readSPO2() {
-  // Example: Read SPO2 sensor (e.g., MAX30102)
-  // Adjust this based on your actual sensor
-  int rawValue = analogRead(SPO2_SENSOR_PIN);
-  int spo2 = map(rawValue, 0, 4095, 70, 100);  // Adjust mapping
-  return spo2;
-}
+      // Parse host and port from serverUrl for a quick TCP test
+      String url = String(serverUrl);
+      bool isHttps = url.startsWith("https://");
+      int hostStart = url.indexOf("//");
+      String host;
+      int port = isHttps ? 443 : 80;
+      String path = "/";
 
-// Function to read heart rate sensor
-int readHeartRate() {
-  // Example: Read heart rate sensor
-  // Adjust this based on your actual sensor
-  int rawValue = analogRead(HEART_RATE_PIN);
-  int heartRate = map(rawValue, 0, 4095, 50, 120);  // Adjust mapping
-  return heartRate;
-}
+      if (hostStart >= 0) {
+        hostStart += 2; // move past //
+        int pathStart = url.indexOf('/', hostStart);
+        if (pathStart < 0) pathStart = url.length();
+        String hostPort = url.substring(hostStart, pathStart);
+        int colon = hostPort.indexOf(':');
+        if (colon >= 0) {
+          host = hostPort.substring(0, colon);
+          port = hostPort.substring(colon + 1).toInt();
+        } else {
+          host = hostPort;
+        }
+        if (pathStart < url.length()) path = url.substring(pathStart);
+      }
 
-// Function to read body temperature sensor
-float readBodyTemp() {
-  // Example: Read temperature sensor (e.g., DS18B20, LM35)
-  // Adjust this based on your actual sensor
-  int rawValue = analogRead(TEMP_SENSOR_PIN);
-  float temp = (rawValue / 4095.0) * 3.3 * 100;  // Adjust based on your sensor
-  return temp;
-}
+      Serial.print("Resolved host: "); Serial.println(host);
+      Serial.print("Resolved port: "); Serial.println(port);
+      Serial.print("Resolved path: "); Serial.println(path);
 
-// Function to send data to Python server
-void sendDataToServer(int aqi, int spo2, int heartRate, float bodyTemp) {
-  HTTPClient http;
+      // Quick TCP connect test
+      bool tcp_ok = false;
+      unsigned long tstart = millis();
+      if (isHttps) {
+        WiFiClientSecure client;
+        client.setTimeout(3000);
+        client.setInsecure();
+        tcp_ok = client.connect(host.c_str(), port);
+        client.stop();
+      } else {
+        WiFiClient client;
+        client.setTimeout(3000);
+        tcp_ok = client.connect(host.c_str(), port);
+        client.stop();
+      }
+      unsigned long tdone = millis() - tstart;
+      Serial.print("TCP connect test: "); Serial.print(tcp_ok ? "OK" : "FAILED");
+      Serial.print(" (ms="); Serial.print(tdone); Serial.println(")");
 
-  HTTPClient http;
-  int code = -1;
+      if (!tcp_ok) {
+        Serial.println("TCP connection to server failed — check IP, port, firewall, and that the server is running and reachable from ESP32 network.");
+        return;
+      }
 
-  // Detect https vs http by prefix
-  bool isHttps = (strncmp(serverURL, "https://", 8) == 0);
+      // Proceed with HTTPClient POST
+      HTTPClient http;
+      bool began = false;
+      if (isHttps) {
+        WiFiClientSecure client;
+        client.setInsecure();
+        began = http.begin(client, serverUrl);
+      } else {
+        began = http.begin(serverUrl);
+      }
 
-  if (isHttps) {
-    WiFiClientSecure client;
-    client.setInsecure(); // DEV: skip certificate verification. Replace with setCACert() in production.
-    if (!http.begin(client, serverURL)) {
-      Serial.println("HTTP begin failed (HTTPS)");
-      return;
-    }
-  } else {
-    if (!http.begin(serverURL)) {
-      Serial.println("HTTP begin failed (HTTP)");
-      return;
-    }
-  }
+      Serial.print("http.begin() -> "); Serial.println(began ? "OK" : "FAILED");
+      if (!began) {
+        Serial.println("http.begin failed; cannot proceed to POST");
+        return;
+      }
 
-  http.addHeader("Content-Type", "application/json");
+      http.addHeader("Content-Type", "application/json");
+      String json = "{";
+      json += "\"aqi\":" + String(aqi) + ",";
+      json += "\"spo2\":" + String(spo2Val) + ",";
+      json += "\"heart_rate\":" + String(hr) + ",";
+      json += "\"body_temp_c\":" + String(tempC, 1);
+      json += "}";
 
-  // Build payload matching server expectations
-  String json = "{";
-  json += "\"aqi\":" + String(aqi) + ",";
-  json += "\"spo2\":" + String(spo2) + ",";
-  json += "\"heart_rate\":" + String(hr) + ",";
-  json += "\"body_temp_c\":" + String(tempC, 1);
-  json += "}";
+      Serial.print("POST to "); Serial.println(serverUrl);
+      Serial.print("Payload: "); Serial.println(json);
 
-  Serial.print("POST to ");
-  Serial.println(serverURL);
-  Serial.print("Payload: ");
-  Serial.println(json);
+      int code = http.POST(json);
 
-  code = http.POST(json);
+      if (code > 0) {
+        Serial.print("HTTP Response code: "); Serial.println(code);
+        String resp = http.getString();
+        if (resp.length()) {
+          Serial.print("Response body: "); Serial.println(resp);
+        }
+      } else {
+        Serial.print("Upload failed, error code: "); Serial.println(code);
+        Serial.println("Negative codes mean a transport-level error (DNS, TCP connect, TLS handshake).");
+        Serial.println("Check: server URL, network connectivity, same WiFi, and firewall.");
+      }
 
-  if (code > 0) {
-    Serial.print("HTTP Response code: ");
-    Serial.println(code);
-    String resp = http.getString();
-    if (resp.length()) {
-      Serial.print("Response body: ");
-      Serial.println(resp);
-    }
-  } else {
-    Serial.print("Upload failed, error code: ");
-    Serial.println(code);
-  }
-
-  http.end();
-}
+      http.end();
 
