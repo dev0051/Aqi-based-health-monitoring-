@@ -28,6 +28,45 @@ data_lock = Lock()
 
 # Get the directory where this script is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+WIFI_DATA_FILE = os.path.join(BASE_DIR, 'wifi_data.json')
+
+
+def append_to_wifi_file(payload: dict) -> None:
+    """Append a JSON object as a single line to the wifi_data.json file."""
+    try:
+        with open(WIFI_DATA_FILE, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"✗ Failed to append to wifi_data.json: {e}")
+
+
+def read_last_entries(n: int = 1) -> list:
+    """Read the last n JSON objects from wifi_data.json (one JSON object per line).
+
+    Returns a list of parsed JSON objects (newest first).
+    """
+    if not os.path.exists(WIFI_DATA_FILE):
+        return []
+
+    try:
+        with open(WIFI_DATA_FILE, 'r', encoding='utf-8') as f:
+            lines = [ln.strip() for ln in f if ln.strip()]
+
+        if not lines:
+            return []
+
+        entries = []
+        for ln in lines[-n:][::-1]:
+            try:
+                entries.append(json.loads(ln))
+            except Exception:
+                # Skip malformed lines
+                continue
+
+        return entries
+    except Exception as e:
+        print(f"✗ Error reading wifi_data.json: {e}")
+        return []
 
 
 @app.route('/')
@@ -42,10 +81,16 @@ def get_telemetry():
     GET endpoint: Dashboard polls this to get latest hardware data
     """
     with data_lock:
-        if latest_data["timestamp"] is None:
-            return jsonify({"error": "No data received yet"}), 503
-        
-        return jsonify(latest_data)
+        # Prefer the in-memory latest_data if available
+        if latest_data["timestamp"] is not None:
+            return jsonify(latest_data)
+
+    # Fallback: try reading the last entry from wifi_data.json
+    entries = read_last_entries(1)
+    if entries:
+        return jsonify(entries[0])
+
+    return jsonify({"error": "No data received yet"}), 503
 
 
 @app.route('/api/telemetry', methods=['POST'])
@@ -67,18 +112,20 @@ def receive_telemetry():
         if not data:
             return jsonify({"error": "No JSON data received"}), 400
         
+        # Ensure timestamp
+        if "timestamp" not in data or not data.get("timestamp"):
+            data["timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
         # Update latest data with thread safety
         with data_lock:
             latest_data["aqi"] = data.get("aqi")
             latest_data["spo2"] = data.get("spo2")
             latest_data["heart_rate"] = data.get("heart_rate")
             latest_data["body_temp_c"] = data.get("body_temp_c")
-            
-            # Use provided timestamp or generate one
-            if "timestamp" in data:
-                latest_data["timestamp"] = data["timestamp"]
-            else:
-                latest_data["timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            latest_data["timestamp"] = data.get("timestamp")
+
+        # Persist to wifi_data.json for dashboard history / crash recovery
+        append_to_wifi_file(latest_data)
         
         print(f"✓ Data received: AQI={latest_data['aqi']}, SPO2={latest_data['spo2']}, "
               f"HR={latest_data['heart_rate']}, Temp={latest_data['body_temp_c']}°C")
@@ -123,6 +170,21 @@ def get_telemetry_latest():
             "body_temp_c": latest_data.get("body_temp_c"),
             "timestamp": latest_data.get("timestamp")
         })
+
+
+@app.route('/api/history', methods=['GET'])
+def get_history():
+    """Return recent telemetry entries from wifi_data.json.
+
+    Query parameter `limit` controls how many recent entries to return (default 50).
+    """
+    limit = request.args.get('limit', default=50, type=int)
+    entries = read_last_entries(limit)
+    # Return newest-first for easy consumption by frontend
+    return jsonify({
+        "count": len(entries),
+        "entries": entries
+    })
 
 
 if __name__ == '__main__':
