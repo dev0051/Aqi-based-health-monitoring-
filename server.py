@@ -152,6 +152,54 @@ def status():
         })
 
 
+
+@app.route('/data', methods=['POST'])
+def data_compat():
+    """Compatibility endpoint: accept posts to `/data` (from `app.py` / simple senders).
+
+    This mirrors the behaviour of `/api/telemetry` but keeps a simple text response
+    for devices that expect a plain `OK` reply.
+    """
+    try:
+        # Try to get JSON body; be permissive (some clients send form-encoded)
+        data = request.get_json(silent=True)
+
+        if not data:
+            # Try form or query parameters as fallback
+            data = request.form.to_dict() or request.args.to_dict() or {}
+
+        # Some clients may wrap payload under a `data` key
+        payload = data.get('data') if isinstance(data, dict) and 'data' in data else data
+
+        if not payload:
+            return "No JSON data received", 400
+
+        # Ensure timestamp
+        if "timestamp" not in payload or not payload.get("timestamp"):
+            payload["timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Update latest_data with thread safety (only known keys)
+        with data_lock:
+            latest_data["aqi"] = payload.get("aqi", latest_data.get("aqi"))
+            latest_data["spo2"] = payload.get("spo2", latest_data.get("spo2"))
+            latest_data["heart_rate"] = payload.get("heart_rate", latest_data.get("heart_rate"))
+            latest_data["body_temp_c"] = payload.get("body_temp_c", latest_data.get("body_temp_c"))
+            latest_data["timestamp"] = payload.get("timestamp")
+
+        # Persist to wifi_data.json
+        append_to_wifi_file(latest_data)
+
+        print(f"✓ /data received: AQI={latest_data['aqi']}, SPO2={latest_data['spo2']}, "
+              f"HR={latest_data['heart_rate']}, Temp={latest_data['body_temp_c']}°C")
+
+        # Return plain OK for very simple clients
+        return "OK", 200
+
+    except Exception as e:
+        print(f"✗ Error on /data: {e}")
+        return str(e), 500
+
+
 @app.route('/api/telemetry/latest', methods=['GET'])
 def get_telemetry_latest():
     """
