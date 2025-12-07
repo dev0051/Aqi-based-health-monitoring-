@@ -253,7 +253,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run HealthSense Dashboard Server')
     parser.add_argument('--host', default=os.getenv('HOST', '0.0.0.0'),
                         help='Host/IP to bind the server (env: HOST)')
-    parser.add_argument('--port', type=int, default=int(os.getenv('PORT', '5000')),
+    parser.add_argument('--port', type=int, default=int(os.getenv('PORT', '5002')),
                         help='Port to bind the server (env: PORT)')
     parser.add_argument('--debug', action='store_true',
                         help='Enable Flask debug mode (or set env DEBUG=1)')
