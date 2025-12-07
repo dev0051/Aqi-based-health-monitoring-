@@ -132,7 +132,7 @@ if __name__ == '__main__':
     print("\n📊 Dashboard URL: https://aqi2.vercel.app/")
     print("📥 Data endpoint: https://aqi2.vercel.app/api/telemetry")
     print("\nYour friend can send POST requests to:")
-    print("   http://10.116.204.42:5000/api/telemetry")
+    print("   http://10.116.204.42:5001/api/telemetry")
     print("\nTo find your IP address:")
     print("   - macOS/Linux: ifconfig | grep 'inet '")
     print("   - Windows: ipconfig")
