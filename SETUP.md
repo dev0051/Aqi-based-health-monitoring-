@@ -43,6 +43,14 @@ If you only need to showcase the UI (e.g., on Vercel) without an ESP32 or Python
 
 You can also set `window.DEMO_MODE = true` before the script runs if you want to hard-code demo mode into a build.
 
+### Offline HTML
+
+Need a version that runs from a USB stick with zero configuration?
+
+- Copy both `aqi_offline.html` and `chart.umd.min.js` to the same folder
+- Double-click `aqi_offline.html` to open it in a browser – it auto-generates demo vitals locally
+- Perfect for sharing with evaluators when no Wi-Fi is available
+
 ## How Your Friend Can Send Data
 
 ### Option 1: Using Python Script (Recommended)
