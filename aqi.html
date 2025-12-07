@@ -511,10 +511,6 @@
       lastSync: document.getElementById('last-sync'),
     };
 
-    const ctxSpo2 = document.getElementById('spo2-chart').getContext('2d');
-    const ctxHr = document.getElementById('hr-chart').getContext('2d');
-    const ctxAqi = document.getElementById('aqi-chart').getContext('2d');
-
     const baseChartOptions = {
       type: 'line',
       data: {
@@ -573,9 +569,7 @@
       },
     };
 
-    state.charts.spo2 = new Chart(ctxSpo2, structuredClone(baseChartOptions));
-    state.charts.heartRate = new Chart(ctxHr, structuredClone(baseChartOptions));
-    state.charts.aqi = new Chart(ctxAqi, structuredClone(baseChartOptions));
+    // Charts will be initialized on DOMContentLoaded to ensure Chart.js is loaded
 
     function pushData(key, value) {
       const history = state.history[key];
@@ -759,6 +753,22 @@
     }
 
     function startPolling() {
+      // Initialize chart contexts and Chart.js instances here so Chart.js is
+      // guaranteed to be available (deferred external script executes before
+      // DOMContentLoaded). This prevents "Chart is not defined" errors.
+      try {
+        if (!state.charts || Object.keys(state.charts).length === 0) {
+          const ctxSpo2 = document.getElementById('spo2-chart').getContext('2d');
+          const ctxHr = document.getElementById('hr-chart').getContext('2d');
+          const ctxAqi = document.getElementById('aqi-chart').getContext('2d');
+          state.charts = state.charts || {};
+          state.charts.spo2 = new Chart(ctxSpo2, structuredClone(baseChartOptions));
+          state.charts.heartRate = new Chart(ctxHr, structuredClone(baseChartOptions));
+          state.charts.aqi = new Chart(ctxAqi, structuredClone(baseChartOptions));
+        }
+      } catch (e) {
+        console.warn('Chart initialization deferred or failed:', e && e.message);
+      }
       if (DEMO_MODE) {
         selectors.linkStatus.textContent = 'Demo';
         selectors.lastSync.textContent = 'Demo mode active';
